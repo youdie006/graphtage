@@ -81,7 +81,11 @@ class LeafNode(TreeNode):
 
     def edits(self, node: TreeNode) -> Edit:
         if isinstance(node, LeafNode):
-            return Match(self, node, exact_string_distance(str(self.object), str(node.object)))
+            cost = exact_string_distance(str(self.object), str(node.object))
+            if cost == 0 and type(self.object) is not type(node.object):
+                # 1 and "1" have the same string form but are different values
+                return Replace(self, node)
+            return Match(self, node, cost)
         elif isinstance(node, ContainerNode):
             return Replace(self, node)
 
@@ -112,7 +116,8 @@ class LeafNode(TreeNode):
 
     def __eq__(self, other):
         if isinstance(other, LeafNode):
-            return self.object == other.object
+            # Python considers True == 1, but they are different values in every supported format
+            return self.object == other.object and isinstance(self.object, bool) == isinstance(other.object, bool)
         else:
             return self.object == other
 

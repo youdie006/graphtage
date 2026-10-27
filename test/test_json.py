@@ -139,3 +139,34 @@ class TestRenderedDiffs(TestCase):
                 b'{"outer": {"inner": {"leaf": 2}, "sibling": [1, 2, 3]}}'
             )
         )
+
+
+class TestValuesOfDifferentTypes(TestCase):
+    """A value whose type changes is a difference, even when Python considers the two values equal."""
+
+    CASES = (
+        (b'{"x": true}', b'{"x": 1}', '{\n    "x": true -> 1\n}'),
+        (b'{"x": 0}', b'{"x": false}', '{\n    "x": 0 -> false\n}'),
+        (b'{"x": 1}', b'{"x": "1"}', '{\n    "x": 1 -> "1"\n}'),
+        (b'{"x": true}', b'{"x": "True"}', '{\n    "x": true -> "True"\n}'),
+        (b'{"x": "None"}', b'{"x": null}', '{\n    "x": "None" -> null\n}'),
+        (b'[true]', b'[1]', '[\n    true -> 1\n]'),
+    )
+
+    def test_type_changes_are_reported(self):
+        for from_content, to_content, expected in self.CASES:
+            with self.subTest(from_content=from_content, to_content=to_content):
+                diff = build(from_content).diff(build(to_content))
+                self.assertTrue(any(edit.has_non_zero_cost() for node in diff.dfs() for edit in node.edit_list))
+                self.assertEqual(expected, render(from_content, to_content))
+
+    def test_differently_spelled_values_keep_their_string_distance(self):
+        edit = build(b'3').edits(build(b'3.5'))
+        self.assertIsInstance(edit, graphtage.Match)
+        self.assertEqual(2, edit.bounds().upper_bound)
+
+    def test_equal_values_are_still_unchanged(self):
+        for content in (b'{"x": true}', b'{"x": 1}', b'{"x": "1"}', b'[1, true, "1", null]'):
+            with self.subTest(content=content):
+                diff = build(content).diff(build(content))
+                self.assertFalse(any(edit.has_non_zero_cost() for node in diff.dfs() for edit in node.edit_list))
